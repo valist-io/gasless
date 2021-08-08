@@ -6,18 +6,16 @@ import (
 	"math/big"
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/signer/core"
 
 	"github.com/valist-io/mexa/forwarder"
 )
 
 const (
-	DomainName    = "Biconomy Forwarder"
-	DomainVersion = "1"
+	metaApiUrl          = "https://api.biconomy.io/api/v1/meta-api"
+	metaTxNativeURL     = "https://api.biconomy.io/api/v2/meta-tx/native"
+	metaTxSystemInfoURL = "https://api.biconomy.io/api/v2/meta-tx/systemInfo" // ?networkId=
 )
 
 // AddressMap is a mapping of chain IDs to Biconomy forwarder contract addresses.
@@ -36,14 +34,17 @@ var AddressMap = map[string]common.Address{
 	"421611": common.HexToAddress("0x67454E169d613a8e9BA6b06af2D267696EAaAf41"), // Arbitrum test
 }
 
+// Mexa is a Biconomy Mexa client.
 type Mexa struct {
 	key      string
 	salt     []byte
 	client   *http.Client
+	chainID  *big.Int
 	address  common.Address
 	contract *forwarder.Forwarder
 }
 
+// NewMexa returns a new mexa client.
 func NewMexa(ctx context.Context, eth *ethclient.Client, key string) (*Mexa, error) {
 	chainID, err := eth.ChainID(ctx)
 	if err != nil {
@@ -67,25 +68,20 @@ func NewMexa(ctx context.Context, eth *ethclient.Client, key string) (*Mexa, err
 		key:      key,
 		salt:     salt,
 		client:   &http.Client{},
+		chainID:  chainID,
 		address:  address,
 		contract: contract,
 	}, nil
 }
 
-func (m *Mexa) Domain() core.TypedDataDomain {
-	return core.TypedDataDomain{
-		Name:              DomainName,
-		Version:           DomainVersion,
-		VerifyingContract: m.address.Hex(),
-		Salt:              hexutil.Encode(m.salt),
-	}
+// MetaApi returns the meta api.
+func (m *Mexa) MetaApi() *MetaApi {
+	api := MetaApi(*m)
+	return &api
 }
 
-func (m *Mexa) Nonce(ctx context.Context, address common.Address, batch *big.Int) (*big.Int, error) {
-	callopts := bind.CallOpts{
-		Context: ctx,
-		From:    address,
-	}
-
-	return m.contract.GetNonce(&callopts, address, batch)
+// MetaTx returns the meta tx api.
+func (m *Mexa) MetaTx() *MetaTx {
+	api := MetaTx(*m)
+	return &api
 }
