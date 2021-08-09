@@ -1,3 +1,4 @@
+//go:generate abigen --abi ./forwarder/ForwarderABI.json --bin ./forwarder/Forwarder.bin --pkg forwarder --out ./forwarder/forwarder.go
 package mexa
 
 import (
@@ -6,16 +7,19 @@ import (
 	"math/big"
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/signer/core"
 
-	"github.com/valist-io/mexa/forwarder"
+	"github.com/valist-io/gasless/mexa/forwarder"
 )
 
 const (
 	metaApiUrl          = "https://api.biconomy.io/api/v1/meta-api"
 	metaTxNativeURL     = "https://api.biconomy.io/api/v2/meta-tx/native"
-	metaTxSystemInfoURL = "https://api.biconomy.io/api/v2/meta-tx/systemInfo" // ?networkId=
+	metaTxSystemInfoURL = "https://api.biconomy.io/api/v2/meta-tx/systemInfo"
 )
 
 // AddressMap is a mapping of chain IDs to Biconomy forwarder contract addresses.
@@ -34,7 +38,7 @@ var AddressMap = map[string]common.Address{
 	"421611": common.HexToAddress("0x67454E169d613a8e9BA6b06af2D267696EAaAf41"), // Arbitrum test
 }
 
-// Mexa is a Biconomy Mexa client.
+// Mexa is a MetaTransactor
 type Mexa struct {
 	key      string
 	salt     []byte
@@ -74,14 +78,46 @@ func NewMexa(ctx context.Context, eth *ethclient.Client, key string) (*Mexa, err
 	}, nil
 }
 
-// MetaApi returns the meta api.
-func (m *Mexa) MetaApi() *MetaApi {
-	api := MetaApi(*m)
-	return &api
+func (m *Mexa) Types() core.Types {
+	return core.Types{
+		"EIP712Domain": []core.Type{
+			{Name: "name", Type: "string"},
+			{Name: "version", Type: "string"},
+			{Name: "verifyingContract", Type: "address"},
+			{Name: "salt", Type: "bytes32"},
+		},
+		"ERC20ForwardRequest": []core.Type{
+			{Name: "from", Type: "address"},
+			{Name: "to", Type: "address"},
+			{Name: "token", Type: "address"},
+			{Name: "txGas", Type: "uint256"},
+			{Name: "tokenGasPrice", Type: "uint256"},
+			{Name: "batchId", Type: "uint256"},
+			{Name: "batchNonce", Type: "uint256"},
+			{Name: "deadline", Type: "uint256"},
+			{Name: "data", Type: "bytes"},
+		},
+	}
 }
 
-// MetaTx returns the meta tx api.
-func (m *Mexa) MetaTx() *MetaTx {
-	api := MetaTx(*m)
-	return &api
+func (m *Mexa) PrimaryType() string {
+	return "ERC20ForwardRequest"
+}
+
+func (m *Mexa) Domain() core.TypedDataDomain {
+	return core.TypedDataDomain{
+		Name:              "Biconomy Forwarder",
+		Version:           "1",
+		VerifyingContract: m.address.Hex(),
+		Salt:              hexutil.Encode(m.salt),
+	}
+}
+
+func (m *Mexa) Nonce(ctx context.Context, address common.Address) (*big.Int, error) {
+	callopts := bind.CallOpts{
+		Context: ctx,
+		From:    address,
+	}
+
+	return m.contract.GetNonce(&callopts, address, big.NewInt(0)) // TODO handle batch id
 }

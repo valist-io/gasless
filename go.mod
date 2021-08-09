@@ -1,4 +1,4 @@
-module github.com/valist-io/mexa
+module github.com/valist-io/gasless
 
 go 1.16
 

@@ -8,8 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type MetaApi Mexa
-
 type MetaTxLimit struct {
 	Type              int     `json:"type"`
 	Value             float32 `json:"value"`
@@ -39,8 +37,8 @@ type MetaApiResponse struct {
 	List  []MetaApiInfo `json:"listApis"`
 }
 
-// List returns a list of all meta tx enabled functions.
-func (m *MetaApi) List(ctx context.Context) (*MetaApiResponse, error) {
+// MetaApi returns a list of all meta tx enabled functions.
+func (m *Mexa) MetaApi(ctx context.Context) (*MetaApiResponse, error) {
 	req, err := http.NewRequest(http.MethodGet, metaApiUrl, nil)
 	if err != nil {
 		return nil, err

@@ -18,6 +18,6 @@ func TestMetaApiList(t *testing.T) {
 	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"))
 	require.NoError(t, err, "Failed to create mexa client")
 
-	_, err = mexa.MetaApi().List(ctx)
+	_, err = mexa.MetaApi(ctx)
 	require.NoError(t, err, "Failed to call meta api")
 }

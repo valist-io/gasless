@@ -2,7 +2,6 @@ package mexa
 
 import (
 	"context"
-	"math/big"
 	"os"
 	"testing"
 
@@ -11,7 +10,12 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/valist-io/gasless"
 )
+
+// Run-time type checking
+var _ gasless.MetaTransactor = (*Mexa)(nil)
 
 func TestMetaTxNonce(t *testing.T) {
 	ctx := context.Background()
@@ -22,10 +26,7 @@ func TestMetaTxNonce(t *testing.T) {
 	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"))
 	require.NoError(t, err, "Failed to create mexa client")
 
-	address := common.HexToAddress("0x0")
-	batchID := big.NewInt(0)
-
-	_, err = mexa.MetaTx().Nonce(ctx, address, batchID)
+	_, err = mexa.Nonce(ctx, common.HexToAddress("0x0"))
 	require.NoError(t, err, "Failed to call meta api")
 }
 
@@ -44,9 +45,9 @@ func TestMetaTxDomain(t *testing.T) {
 	address := AddressMap[chainID.String()]
 	salt := common.LeftPadBytes(chainID.Bytes(), 32)
 
-	domain := mexa.MetaTx().Domain()
-	assert.Equal(t, MetaTxDomainName, domain.Name)
-	assert.Equal(t, MetaTxDomainVersion, domain.Version)
+	domain := mexa.Domain()
+	assert.Equal(t, "Biconomy Forwarder", domain.Name)
+	assert.Equal(t, "1", domain.Version)
 	assert.Equal(t, address.Hex(), domain.VerifyingContract)
 	assert.Equal(t, hexutil.Encode(salt), domain.Salt)
 }
