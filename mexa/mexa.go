@@ -133,7 +133,7 @@ func (m *Mexa) Nonce(ctx context.Context, address common.Address) (*big.Int, err
 }
 
 // SendTransaction submits the meta transaction with the given signature.
-func (m *Mexa) SendTransaction(ctx context.Context, message gasless.Message, domainSeparator, signature []byte) (*types.Transaction, error) {
+func (m *Mexa) SendTransaction(ctx context.Context, message gasless.EIP712Message, domainSeparator, signature []byte) (*types.Transaction, error) {
 	msg, ok := message.(*Message)
 	if !ok {
 		return nil, fmt.Errorf("invalid message type")

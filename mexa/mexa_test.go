@@ -5,50 +5,66 @@ import (
 	"math/big"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/valist-io/gasless"
+	"github.com/valist-io/gasless/test"
 )
 
 // Run-time type checking
-var _ gasless.Meta = (*Mexa)(nil)
+var _ gasless.MetaTransactor = (*Mexa)(nil)
 
-func TestMetaTxNonce(t *testing.T) {
+func TestSendTransaction(t *testing.T) {
 	ctx := context.Background()
 
-	eth, err := ethclient.Dial("https://rpc.valist.io")
+	eth, err := ethclient.Dial("https://rpc-mumbai.maticvigil.com/v1/c3aff22829d4f252395cd74e245b65d018dcedc1")
 	require.NoError(t, err, "Failed to create ethclient")
 
 	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"), big.NewInt(0))
 	require.NoError(t, err, "Failed to create mexa client")
 
-	_, err = mexa.Nonce(ctx, common.HexToAddress("0x0"))
-	require.NoError(t, err, "Failed to call meta api")
-}
+	contract, err := test.NewTest(test.ValistAddress, eth)
+	require.NoError(t, err, "Failed to create contract")
 
-func TestMetaTxDomain(t *testing.T) {
-	ctx := context.Background()
+	private, err := crypto.GenerateKey()
+	require.NoError(t, err, "Failed to generate private key")
 
-	eth, err := ethclient.Dial("https://rpc.valist.io")
-	require.NoError(t, err, "Failed to create ethclient")
+	address := crypto.PubkeyToAddress(private.PublicKey)
+	txopts := &bind.TransactOpts{
+		NoSend: true,
+		From:   common.HexToAddress("0x0"),
+		Signer: func(address common.Address, transaction *types.Transaction) (*types.Transaction, error) {
+			return transaction, nil
+		},
+	}
 
-	chainID, err := eth.ChainID(ctx)
-	require.NoError(t, err, "Failed to get chain id")
+	tx, err := contract.CreateOrganization(txopts, "test")
+	require.NoError(t, err, "Failed to create transaction")
 
-	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"), big.NewInt(0))
-	require.NoError(t, err, "Failed to create mexa client")
+	nonce, err := mexa.Nonce(ctx, address)
+	require.NoError(t, err, "Failed to get address nonce")
 
-	address := AddressMap[chainID.String()]
-	salt := common.LeftPadBytes(chainID.Bytes(), 32)
+	message := &Message{
+		ApiId:         "9659e431-884a-42e6-9b83-c3cb920a76a7",
+		From:          address,
+		To:            *tx.To(),
+		Token:         common.HexToAddress("0x0"),
+		TxGas:         tx.Gas(),
+		TokenGasPrice: big.NewInt(0),
+		BatchId:       big.NewInt(0),
+		BatchNonce:    nonce,
+		Deadline:      big.NewInt(time.Now().Add(time.Hour).Unix()),
+		Data:          tx.Data(),
+	}
 
-	domain := mexa.Domain()
-	assert.Equal(t, "Biconomy Forwarder", domain.Name)
-	assert.Equal(t, "1", domain.Version)
-	assert.Equal(t, address.Hex(), domain.VerifyingContract)
-	assert.Equal(t, hexutil.Encode(salt), domain.Salt)
+	signer := gasless.NewPrivateKeySigner(private)
+	tx, err = gasless.SendTransaction(ctx, mexa, message, signer)
+	require.NoError(t, err, "Failed to send transaction")
 }

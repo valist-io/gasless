@@ -11,8 +11,8 @@ import (
 
 const EIP712Domain = "EIP712Domain"
 
-// Meta is a meta transaction sender.
-type Meta interface {
+// MetaTransactor is a meta transaction sender.
+type MetaTransactor interface {
 	// Types returns the typed data types.
 	Types() core.Types
 	// PrimaryType returns the typed data primary type.
@@ -22,17 +22,17 @@ type Meta interface {
 	// Nonce returns the latest nonce for the given address.
 	Nonce(context.Context, common.Address) (*big.Int, error)
 	// SendTransaction submits the meta transaction with the given signature.
-	SendTransaction(context.Context, Message, []byte, []byte) (*types.Transaction, error)
+	SendTransaction(context.Context, EIP712Message, []byte, []byte) (*types.Transaction, error)
 }
 
-// Message contains meta transaction data.
-type Message interface {
+// EIP712Message contains meta transaction data.
+type EIP712Message interface {
 	// TypedData returns the typed data formatted message.
 	TypedData() core.TypedDataMessage
 }
 
 // SendTransaction signs the given message and submits it to the given Meta provider.
-func SendTransaction(ctx context.Context, meta Meta, message Message, signer Signer) (*types.Transaction, error) {
+func SendTransaction(ctx context.Context, meta MetaTransactor, message EIP712Message, signer Signer) (*types.Transaction, error) {
 	typedData := core.TypedData{
 		Types:       meta.Types(),
 		PrimaryType: meta.PrimaryType(),
