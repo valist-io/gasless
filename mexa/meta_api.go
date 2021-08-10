@@ -3,6 +3,8 @@ package mexa
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -53,9 +55,18 @@ func (m *Mexa) MetaApi(ctx context.Context) (*MetaApiResponse, error) {
 	}
 	defer res.Body.Close()
 
-	var reply MetaApiResponse
-	if err := json.NewDecoder(res.Body).Decode(&reply); err != nil {
+	replyData, err := io.ReadAll(res.Body)
+	if err != nil {
 		return nil, err
+	}
+
+	var reply MetaApiResponse
+	if err := json.Unmarshal(replyData, &reply); err != nil {
+		return nil, err
+	}
+
+	if reply.Flag != 143 {
+		return nil, fmt.Errorf("%s", replyData)
 	}
 
 	return &reply, nil

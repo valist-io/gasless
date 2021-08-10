@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -46,9 +48,18 @@ func (m *Mexa) MetaTx(ctx context.Context, data *MetaTxRequest) (*MetaTxResponse
 	}
 	defer res.Body.Close()
 
-	var reply MetaTxResponse
-	if err := json.NewDecoder(res.Body).Decode(&reply); err != nil {
+	replyData, err := io.ReadAll(res.Body)
+	if err != nil {
 		return nil, err
+	}
+
+	var reply MetaTxResponse
+	if err := json.Unmarshal(replyData, &reply); err != nil {
+		return nil, err
+	}
+
+	if reply.TxHash == common.HexToHash("0x0") {
+		return nil, fmt.Errorf("%s", replyData)
 	}
 
 	return &reply, nil

@@ -13,7 +13,7 @@ import (
 func TestMetaApiList(t *testing.T) {
 	ctx := context.Background()
 
-	eth, err := ethclient.Dial("https://rpc.valist.io")
+	eth, err := ethclient.Dial(os.Getenv("RPC_URL"))
 	require.NoError(t, err, "Failed to create ethclient")
 
 	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"), big.NewInt(0))

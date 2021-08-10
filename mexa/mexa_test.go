@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -24,7 +25,7 @@ var _ gasless.MetaTransactor = (*Mexa)(nil)
 func TestSendTransaction(t *testing.T) {
 	ctx := context.Background()
 
-	eth, err := ethclient.Dial("https://rpc-mumbai.maticvigil.com/v1/c3aff22829d4f252395cd74e245b65d018dcedc1")
+	eth, err := ethclient.Dial(os.Getenv("RPC_URL"))
 	require.NoError(t, err, "Failed to create ethclient")
 
 	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"), big.NewInt(0))
@@ -57,11 +58,11 @@ func TestSendTransaction(t *testing.T) {
 		To:            *tx.To(),
 		Token:         common.HexToAddress("0x0"),
 		TxGas:         tx.Gas(),
-		TokenGasPrice: big.NewInt(0),
+		TokenGasPrice: "0",
 		BatchId:       big.NewInt(0),
 		BatchNonce:    nonce,
 		Deadline:      big.NewInt(time.Now().Add(time.Hour).Unix()),
-		Data:          tx.Data(),
+		Data:          hexutil.Encode(tx.Data()),
 	}
 
 	signer := gasless.NewPrivateKeySigner(private)
