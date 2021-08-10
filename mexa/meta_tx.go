@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const SignatureTypeEIP712 = "EIP712_SIGN"
@@ -18,9 +20,9 @@ type MetaTxRequest struct {
 }
 
 type MetaTxResponse struct {
-	TxHash string `json:"txHash"`
-	Log    string `json:"log"`
-	Flag   int    `json:"flag"`
+	TxHash common.Hash `json:"txHash"`
+	Log    string      `json:"log"`
+	Flag   int         `json:"flag"`
 }
 
 // MetaTx executes a meta transaction using the given data.

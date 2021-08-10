@@ -2,55 +2,53 @@ package gasless
 
 import (
 	"context"
-	"encoding/json"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/signer/core"
 )
 
-type MetaTransactor interface {
+const EIP712Domain = "EIP712Domain"
+
+// Meta is a meta transaction sender.
+type Meta interface {
+	// Types returns the typed data types.
 	Types() core.Types
+	// PrimaryType returns the typed data primary type.
 	PrimaryType() string
+	// Domain returns the typed data domain.
 	Domain() core.TypedDataDomain
+	// Nonce returns the latest nonce for the given address.
 	Nonce(context.Context, common.Address) (*big.Int, error)
-	SendTransaction(context.Context, EIP712Message, []byte, []byte) (*types.Transaction, error)
+	// SendTransaction submits the meta transaction with the given signature.
+	SendTransaction(context.Context, Message, []byte, []byte) (*types.Transaction, error)
 }
 
-type EIP712Message interface {
+// Message contains meta transaction data.
+type Message interface {
+	// TypedData returns the typed data formatted message.
 	TypedData() core.TypedDataMessage
 }
 
-func SendTransaction(
-	ctx context.Context,
-	t MetaTransactor,
-	message EIP712Message,
-	account accounts.Account,
-	wallet accounts.Wallet,
-) (*types.Transaction, error) {
+// SendTransaction signs the given message and submits it to the given Meta provider.
+func SendTransaction(ctx context.Context, meta Meta, message Message, signer Signer) (*types.Transaction, error) {
 	typedData := core.TypedData{
-		Types:       t.Types(),
-		PrimaryType: t.PrimaryType(),
-		Domain:      t.Domain(),
+		Types:       meta.Types(),
+		PrimaryType: meta.PrimaryType(),
+		Domain:      meta.Domain(),
 		Message:     message.TypedData(),
 	}
 
-	data, err := json.Marshal(typedData)
+	signature, err := signer(typedData)
 	if err != nil {
 		return nil, err
 	}
 
-	signature, err := wallet.SignData(account, accounts.MimetypeTypedData, data)
+	domainSeparator, err := typedData.HashStruct(EIP712Domain, typedData.Domain.Map())
 	if err != nil {
 		return nil, err
 	}
 
-	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
-	if err != nil {
-		return nil, err
-	}
-
-	return t.SendTransaction(ctx, message, domainSeparator, signature)
+	return meta.SendTransaction(ctx, message, domainSeparator, signature)
 }

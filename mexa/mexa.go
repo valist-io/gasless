@@ -40,19 +40,20 @@ var AddressMap = map[string]common.Address{
 	"421611": common.HexToAddress("0x67454E169d613a8e9BA6b06af2D267696EAaAf41"), // Arbitrum test
 }
 
-// Mexa is a MetaTransactor
+// Mexa implements EIP712 meta transactions.
 type Mexa struct {
 	eth      *ethclient.Client
 	key      string
 	salt     []byte
 	client   *http.Client
+	batchID  *big.Int
 	chainID  *big.Int
 	address  common.Address
 	contract *forwarder.Forwarder
 }
 
-// NewMexa returns a new mexa client.
-func NewMexa(ctx context.Context, eth *ethclient.Client, key string) (*Mexa, error) {
+// NewMexa returns a client with the given eth client, key, and batchID.
+func NewMexa(ctx context.Context, eth *ethclient.Client, key string, batchID *big.Int) (*Mexa, error) {
 	chainID, err := eth.ChainID(ctx)
 	if err != nil {
 		return nil, err
@@ -76,12 +77,14 @@ func NewMexa(ctx context.Context, eth *ethclient.Client, key string) (*Mexa, err
 		key:      key,
 		salt:     salt,
 		client:   &http.Client{},
+		batchID:  batchID,
 		chainID:  chainID,
 		address:  address,
 		contract: contract,
 	}, nil
 }
 
+// Types returns the typed data types.
 func (m *Mexa) Types() core.Types {
 	return core.Types{
 		"EIP712Domain": []core.Type{
@@ -104,10 +107,12 @@ func (m *Mexa) Types() core.Types {
 	}
 }
 
+// PrimaryType returns the typed data primary type.
 func (m *Mexa) PrimaryType() string {
 	return "ERC20ForwardRequest"
 }
 
+// Domain returns the typed data domain.
 func (m *Mexa) Domain() core.TypedDataDomain {
 	return core.TypedDataDomain{
 		Name:              "Biconomy Forwarder",
@@ -117,16 +122,18 @@ func (m *Mexa) Domain() core.TypedDataDomain {
 	}
 }
 
+// Nonce returns the latest nonce for the given address.
 func (m *Mexa) Nonce(ctx context.Context, address common.Address) (*big.Int, error) {
 	callopts := bind.CallOpts{
 		Context: ctx,
 		From:    address,
 	}
 
-	return m.contract.GetNonce(&callopts, address, big.NewInt(0)) // TODO handle batch id
+	return m.contract.GetNonce(&callopts, address, m.batchID)
 }
 
-func (m *Mexa) SendTransaction(ctx context.Context, message gasless.EIP712Message, domainSeparator, signature []byte) (*types.Transaction, error) {
+// SendTransaction submits the meta transaction with the given signature.
+func (m *Mexa) SendTransaction(ctx context.Context, message gasless.Message, domainSeparator, signature []byte) (*types.Transaction, error) {
 	msg, ok := message.(*Message)
 	if !ok {
 		return nil, fmt.Errorf("invalid message type")
@@ -146,11 +153,13 @@ func (m *Mexa) SendTransaction(ctx context.Context, message gasless.EIP712Messag
 
 	res, err := m.MetaTx(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("transaction failed: %v", err)
 	}
 
-	// TODO extra error check on res
+	if res.Flag != 200 {
+		return nil, fmt.Errorf("transaction failed: %s", res.Log)
+	}
 
-	tx, _, err := m.eth.TransactionByHash(ctx, common.HexToHash(res.TxHash))
+	tx, _, err := m.eth.TransactionByHash(ctx, res.TxHash)
 	return tx, err
 }

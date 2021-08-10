@@ -2,6 +2,7 @@ package mexa
 
 import (
 	"context"
+	"math/big"
 	"os"
 	"testing"
 
@@ -15,7 +16,7 @@ import (
 )
 
 // Run-time type checking
-var _ gasless.MetaTransactor = (*Mexa)(nil)
+var _ gasless.Meta = (*Mexa)(nil)
 
 func TestMetaTxNonce(t *testing.T) {
 	ctx := context.Background()
@@ -23,7 +24,7 @@ func TestMetaTxNonce(t *testing.T) {
 	eth, err := ethclient.Dial("https://rpc.valist.io")
 	require.NoError(t, err, "Failed to create ethclient")
 
-	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"))
+	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"), big.NewInt(0))
 	require.NoError(t, err, "Failed to create mexa client")
 
 	_, err = mexa.Nonce(ctx, common.HexToAddress("0x0"))
@@ -39,7 +40,7 @@ func TestMetaTxDomain(t *testing.T) {
 	chainID, err := eth.ChainID(ctx)
 	require.NoError(t, err, "Failed to get chain id")
 
-	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"))
+	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"), big.NewInt(0))
 	require.NoError(t, err, "Failed to create mexa client")
 
 	address := AddressMap[chainID.String()]
