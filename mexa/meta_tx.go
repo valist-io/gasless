@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -42,11 +44,21 @@ func (m *Mexa) MetaTx(ctx context.Context, data *MetaTxRequest) (*MetaTxResponse
 	if err != nil {
 		return nil, err
 	}
+
 	defer res.Body.Close()
 
-	var reply MetaTxResponse
-	if err := json.NewDecoder(res.Body).Decode(&reply); err != nil {
+	bodyBytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
 		return nil, err
+	}
+
+	var reply MetaTxResponse
+	if err := json.Unmarshal(bodyBytes, &reply); err != nil {
+		return nil, err
+	}
+
+	if reply.TxHash == "" {
+		return nil, fmt.Errorf(string(bodyBytes))
 	}
 
 	return &reply, nil

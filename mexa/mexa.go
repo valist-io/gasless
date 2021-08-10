@@ -138,7 +138,7 @@ func (m *Mexa) SendTransaction(ctx context.Context, message gasless.EIP712Messag
 		ApiId:         msg.ApiId,
 		SignatureType: SignatureTypeEIP712,
 		Params: []interface{}{
-			message.TypedData(),
+			message.TypedDataJSON(),
 			hexutil.Encode(domainSeparator),
 			hexutil.Encode(signature),
 		},
@@ -148,8 +148,6 @@ func (m *Mexa) SendTransaction(ctx context.Context, message gasless.EIP712Messag
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO extra error check on res
 
 	tx, _, err := m.eth.TransactionByHash(ctx, common.HexToHash(res.TxHash))
 	return tx, err

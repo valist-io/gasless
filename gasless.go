@@ -21,6 +21,7 @@ type MetaTransactor interface {
 
 type EIP712Message interface {
 	TypedData() core.TypedDataMessage
+	TypedDataJSON() interface{} // return TypedData struct that marshals to the correct JSON
 }
 
 func SendTransaction(

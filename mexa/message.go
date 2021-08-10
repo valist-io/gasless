@@ -12,7 +12,6 @@ import (
 type Message struct {
 	ApiId         string
 	BatchId       *big.Int
-	Nonce         *big.Int
 	From          common.Address
 	To            common.Address
 	Token         common.Address
@@ -21,6 +20,18 @@ type Message struct {
 	BatchNonce    *big.Int
 	Deadline      *big.Int
 	Data          []byte
+}
+
+type biconomyEIP712Message struct {
+	From          string   `json:"from"`
+	To            string   `json:"to"`
+	Token         string   `json:"token"`
+	TxGas         uint64   `json:"txGas"`
+	TokenGasPrice string   `json:"tokenGasPrice"`
+	BatchId       *big.Int `json:"batchId"`
+	BatchNonce    *big.Int `json:"batchNonce"`
+	Deadline      string   `json:"deadline"`
+	Data          string   `json:"data"`
 }
 
 func (m *Message) TypedData() core.TypedDataMessage {
@@ -40,5 +51,19 @@ func (m *Message) TypedData() core.TypedDataMessage {
 		"batchNonce":    &batchNonce,
 		"deadline":      &deadline,
 		"data":          hexutil.Encode(m.Data),
+	}
+}
+
+func (m *Message) TypedDataJSON() interface{} {
+	return biconomyEIP712Message{
+		From:          m.From.Hex(),
+		To:            m.To.Hex(),
+		Token:         m.Token.Hex(),
+		TxGas:         m.TxGas,
+		TokenGasPrice: m.TokenGasPrice.String(),
+		BatchId:       m.BatchId,
+		BatchNonce:    m.BatchNonce,
+		Deadline:      m.Deadline.String(),
+		Data:          hexutil.Encode(m.Data),
 	}
 }
