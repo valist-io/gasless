@@ -10,9 +10,11 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/signer/core"
 
+	"github.com/valist-io/gasless"
 	"github.com/valist-io/gasless/mexa/forwarder"
 )
 
@@ -40,6 +42,7 @@ var AddressMap = map[string]common.Address{
 
 // Mexa is a MetaTransactor
 type Mexa struct {
+	eth      *ethclient.Client
 	key      string
 	salt     []byte
 	client   *http.Client
@@ -69,6 +72,7 @@ func NewMexa(ctx context.Context, eth *ethclient.Client, key string) (*Mexa, err
 	salt := common.LeftPadBytes(chainID.Bytes(), 32)
 
 	return &Mexa{
+		eth:      eth,
 		key:      key,
 		salt:     salt,
 		client:   &http.Client{},
@@ -120,4 +124,33 @@ func (m *Mexa) Nonce(ctx context.Context, address common.Address) (*big.Int, err
 	}
 
 	return m.contract.GetNonce(&callopts, address, big.NewInt(0)) // TODO handle batch id
+}
+
+func (m *Mexa) SendTransaction(ctx context.Context, message gasless.EIP712Message, domainSeparator, signature []byte) (*types.Transaction, error) {
+	msg, ok := message.(*Message)
+	if !ok {
+		return nil, fmt.Errorf("invalid message type")
+	}
+
+	req := &MetaTxRequest{
+		To:            msg.To.Hex(),
+		From:          msg.From.Hex(),
+		ApiId:         msg.ApiId,
+		SignatureType: SignatureTypeEIP712,
+		Params: []interface{}{
+			message.TypedData(),
+			hexutil.Encode(domainSeparator),
+			hexutil.Encode(signature),
+		},
+	}
+
+	res, err := m.MetaTx(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO extra error check on res
+
+	tx, _, err := m.eth.TransactionByHash(ctx, common.HexToHash(res.TxHash))
+	return tx, err
 }
