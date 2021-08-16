@@ -9,7 +9,6 @@ import (
 )
 
 type Message struct {
-	ApiId         string         `json:"-"`
 	From          common.Address `json:"from"`
 	To            common.Address `json:"to"`
 	Token         common.Address `json:"token"`
