@@ -2,7 +2,6 @@ package mexa
 
 import (
 	"context"
-	"math/big"
 	"os"
 	"testing"
 
@@ -16,7 +15,7 @@ func TestMetaApiList(t *testing.T) {
 	eth, err := ethclient.Dial(os.Getenv("RPC_URL"))
 	require.NoError(t, err, "Failed to create ethclient")
 
-	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"), big.NewInt(0))
+	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"))
 	require.NoError(t, err, "Failed to create mexa client")
 
 	_, err = mexa.MetaApi(ctx)
