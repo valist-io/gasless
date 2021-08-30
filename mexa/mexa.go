@@ -142,6 +142,8 @@ func (m *Mexa) Transact(ctx context.Context, msg *ethereum.CallMsg, signer gasle
 		Data:          hexutil.Encode(msg.Data),
 	}
 
+	fmt.Println(m.key)
+
 	typedData := core.TypedData{
 		Types:       Types,
 		PrimaryType: PrimaryType,
