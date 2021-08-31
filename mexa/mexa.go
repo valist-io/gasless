@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -106,7 +107,7 @@ func NewMexa(ctx context.Context, eth *ethclient.Client, key string) (*Mexa, err
 }
 
 // Transact creates a meta transaction from the given transaction.
-func (m *Mexa) Transact(ctx context.Context, tx *types.Transaction, signer gasless.Signer, params ...interface{}) (*types.Transaction, error) {
+func (m *Mexa) Transact(ctx context.Context, msg *ethereum.CallMsg, signer gasless.Signer, params ...interface{}) (*types.Transaction, error) {
 	// TODO make this a param
 	batchID := big.NewInt(0)
 
@@ -131,15 +132,17 @@ func (m *Mexa) Transact(ctx context.Context, tx *types.Transaction, signer gasle
 
 	message := &Message{
 		From:          signer.Address(),
-		To:            *tx.To(),
+		To:            *msg.To,
 		Token:         common.HexToAddress("0x0"),
-		TxGas:         tx.Gas(),
+		TxGas:         msg.Gas,
 		TokenGasPrice: "0",
 		BatchId:       batchID,
 		BatchNonce:    nonce,
 		Deadline:      big.NewInt(time.Now().Add(time.Hour).Unix()),
-		Data:          hexutil.Encode(tx.Data()),
+		Data:          hexutil.Encode(msg.Data),
 	}
+
+	fmt.Println(m.key)
 
 	typedData := core.TypedData{
 		Types:       Types,
@@ -175,6 +178,6 @@ func (m *Mexa) Transact(ctx context.Context, tx *types.Transaction, signer gasle
 		return nil, fmt.Errorf("transaction failed: %v", err)
 	}
 
-	tx, _, err = m.eth.TransactionByHash(ctx, res.TxHash)
+	tx, _, err := m.eth.TransactionByHash(ctx, res.TxHash)
 	return tx, err
 }
