@@ -13,12 +13,12 @@ type Wallet struct {
 }
 
 // NewWallet returns a wrapped ethereum wallet.
-func NewWallet(wallet accounts.Wallet) *Wallet {
-	return &Wallet{wallet}
+func NewWallet(wallet accounts.Wallet) Wallet {
+	return Wallet{wallet}
 }
 
 // SignTypedData returns a signature derived from the typed data.
-func (w *Wallet) SignTypedData(account accounts.Account, typedData core.TypedData) ([]byte, error) {
+func (w Wallet) SignTypedData(account accounts.Account, typedData core.TypedData) ([]byte, error) {
 	data, err := formatTypedData(typedData)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func (w *Wallet) SignTypedData(account accounts.Account, typedData core.TypedDat
 }
 
 // SignTypedData is identical to SignTypedData, but also takes a passphrase.
-func (w *Wallet) SignTypedDataWithPassphrase(account accounts.Account, passphrase string, typedData core.TypedData) ([]byte, error) {
+func (w Wallet) SignTypedDataWithPassphrase(account accounts.Account, passphrase string, typedData core.TypedData) ([]byte, error) {
 	data, err := formatTypedData(typedData)
 	if err != nil {
 		return nil, err

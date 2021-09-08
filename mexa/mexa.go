@@ -88,14 +88,14 @@ type Mexa struct {
 	forwarderContract *forwarder.Forwarder
 }
 
-// NewMexa returns a transactor using the given address and json to build meta transaction requests.
-func NewMexa(ctx context.Context, eth *ethclient.Client, address common.Address, jsonABI string, apiKey string) (*Mexa, error) {
+// NewTransactor returns a transactor using the given address and json to build meta transaction requests.
+func NewTransactor(eth *ethclient.Client, address common.Address, jsonABI string, apiKey string) (*Mexa, error) {
 	parsedABI, err := abi.JSON(strings.NewReader(jsonABI))
 	if err != nil {
 		return nil, err
 	}
 
-	chainID, err := eth.ChainID(ctx)
+	chainID, err := eth.ChainID(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func NewMexa(ctx context.Context, eth *ethclient.Client, address common.Address,
 		forwarderContract: forwarderContract,
 	}
 
-	res, err := mexa.MetaApi(ctx)
+	res, err := mexa.MetaApi(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (m *Mexa) Transact(opts *gasless.TransactOpts, method string, params ...int
 		},
 	}
 
-	signature, err := opts.Signer(opts.From, typedData)
+	signature, err := opts.MetaSigner(opts.From, typedData)
 	if err != nil {
 		return nil, err
 	}

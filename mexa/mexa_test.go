@@ -1,7 +1,6 @@
 package mexa
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -23,8 +22,6 @@ const (
 )
 
 func TestSendTransaction(t *testing.T) {
-	ctx := context.Background()
-
 	tmp, err := os.MkdirTemp("", "")
 	require.NoError(t, err, "Failed to create tmp dir")
 	defer os.RemoveAll(tmp)
@@ -39,7 +36,7 @@ func TestSendTransaction(t *testing.T) {
 	eth, err := ethclient.Dial(os.Getenv("RPC_URL"))
 	require.NoError(t, err, "Failed to create ethclient")
 
-	mexa, err := NewMexa(ctx, eth, test.ValistAddress, test.TestABI, os.Getenv("BICONOMY_API_KEY"))
+	mexa, err := NewTransactor(eth, test.ValistAddress, test.TestABI, os.Getenv("BICONOMY_API_KEY"))
 	require.NoError(t, err, "Failed to create mexa client")
 
 	wallet := gasless.NewWallet(signer.Wallets()[0])
