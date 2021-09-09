@@ -1,11 +1,10 @@
 package mexa
 
 import (
-	"context"
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
@@ -16,26 +15,33 @@ import (
 // Run-time type checking
 var _ gasless.Transactor = (*Mexa)(nil)
 
+const (
+	veryLightScryptN = 2
+	veryLightScryptP = 1
+	passphrase       = "secret"
+)
+
 func TestSendTransaction(t *testing.T) {
-	ctx := context.Background()
+	tmp, err := os.MkdirTemp("", "")
+	require.NoError(t, err, "Failed to create tmp dir")
+	defer os.RemoveAll(tmp)
+
+	signer := keystore.NewKeyStore(tmp, veryLightScryptN, veryLightScryptP)
+	account, err := signer.NewAccount(passphrase)
+	require.NoError(t, err, "Failed to create account")
+
+	err = signer.Unlock(account, passphrase)
+	require.NoError(t, err, "Failed to unlock account")
 
 	eth, err := ethclient.Dial(os.Getenv("RPC_URL"))
 	require.NoError(t, err, "Failed to create ethclient")
 
-	mexa, err := NewMexa(ctx, eth, os.Getenv("BICONOMY_API_KEY"))
+	mexa, err := NewTransactor(eth, test.ValistAddress, test.TestABI, os.Getenv("BICONOMY_API_KEY"))
 	require.NoError(t, err, "Failed to create mexa client")
 
-	private, err := crypto.GenerateKey()
-	require.NoError(t, err, "Failed to generate private key")
-	public := crypto.PubkeyToAddress(private.PublicKey)
+	wallet := gasless.NewWallet(signer.Wallets()[0])
+	txopts := gasless.NewWalletTransactor(account, wallet)
 
-	builder, err := gasless.NewMessageBuilder(test.TestABI, test.ValistAddress, eth)
-	require.NoError(t, err, "Failed to create message builder")
-
-	msg, err := builder.Message(ctx, public, "createOrganization", "test")
-	require.NoError(t, err, "Failed to create ethereum message")
-
-	signer := gasless.NewPrivateKeySigner(private)
-	mexa.Transact(ctx, msg, signer, "9659e431-884a-42e6-9b83-c3cb920a76a7")
+	_, err = mexa.Transact(txopts, "createOrganization", "0xDEADBEEF")
 	require.NoError(t, err, "Failed to send transaction")
 }

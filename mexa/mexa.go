@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"strings"
 	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -26,7 +28,11 @@ const (
 	metaTxSystemInfoURL = "https://api.biconomy.io/api/v2/meta-tx/systemInfo"
 )
 
-const PrimaryType = "ERC20ForwardRequest"
+const (
+	PrimaryType = "ERC20ForwardRequest"
+	Name        = "Biconomy Forwarder"
+	Version     = "1"
+)
 
 var Types = core.Types{
 	"EIP712Domain": []core.Type{
@@ -48,8 +54,8 @@ var Types = core.Types{
 	},
 }
 
-// AddressMap is a mapping of chain IDs to Biconomy forwarder contract addresses.
-var AddressMap = map[string]common.Address{
+// ForwarderAddressMap is a mapping of chain IDs to Biconomy forwarder contract addresses.
+var ForwarderAddressMap = map[string]common.Address{
 	"1":      common.HexToAddress("0x84a0856b038eaAd1cC7E297cF34A7e72685A8693"), // Ethereum mainnet
 	"3":      common.HexToAddress("0x3D1D6A62c588C1Ee23365AF623bdF306Eb47217A"), // Ropsten testnet
 	"4":      common.HexToAddress("0xFD4973FeB2031D4409fB57afEE5dF2051b171104"), // Rinkeby testnet
@@ -66,92 +72,134 @@ var AddressMap = map[string]common.Address{
 
 // Mexa implements EIP712 meta transactions.
 type Mexa struct {
-	eth      *ethclient.Client
-	key      string
-	client   *http.Client
-	contract *forwarder.Forwarder
-	domain   core.TypedDataDomain
+	eth    *ethclient.Client
+	client *http.Client
+
+	abi     abi.ABI
+	address common.Address
+
+	apiKey string
+	apiID  map[string]string
+
+	chainID *big.Int
+	batchID *big.Int
+
+	forwarderAddress  common.Address
+	forwarderContract *forwarder.Forwarder
 }
 
-// NewMexa returns a client with the given eth client, key, and batchID.
-func NewMexa(ctx context.Context, eth *ethclient.Client, key string) (*Mexa, error) {
-	chainID, err := eth.ChainID(ctx)
+// NewTransactor returns a transactor using the given address and json to build meta transaction requests.
+func NewTransactor(eth *ethclient.Client, address common.Address, jsonABI string, apiKey string) (*Mexa, error) {
+	parsedABI, err := abi.JSON(strings.NewReader(jsonABI))
 	if err != nil {
 		return nil, err
 	}
 
-	address, ok := AddressMap[chainID.String()]
-	if !ok {
-		return nil, fmt.Errorf("Chain ID not supported: %s", chainID)
-	}
-
-	contract, err := forwarder.NewForwarder(address, eth)
+	chainID, err := eth.ChainID(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	salt := common.LeftPadBytes(chainID.Bytes(), 32)
-
-	return &Mexa{
-		eth:      eth,
-		key:      key,
-		client:   &http.Client{},
-		contract: contract,
-		domain: core.TypedDataDomain{
-			Name:              "Biconomy Forwarder",
-			Version:           "1",
-			VerifyingContract: address.Hex(),
-			Salt:              hexutil.Encode(salt),
-		},
-	}, nil
-}
-
-// Transact creates a meta transaction from the given transaction.
-func (m *Mexa) Transact(ctx context.Context, msg *ethereum.CallMsg, signer gasless.Signer, params ...interface{}) (*types.Transaction, error) {
-	// TODO make this a param
-	batchID := big.NewInt(0)
-
-	if len(params) == 0 {
-		return nil, fmt.Errorf("mexa transact requires ApiId string param")
+	forwarderAddress, ok := ForwarderAddressMap[chainID.String()]
+	if !ok {
+		return nil, fmt.Errorf("Chain ID not supported: %v", chainID)
 	}
 
-	apiId, ok := params[0].(string)
+	forwarderContract, err := forwarder.NewForwarder(forwarderAddress, eth)
+	if err != nil {
+		return nil, err
+	}
+
+	mexa := &Mexa{
+		eth:    eth,
+		client: &http.Client{},
+
+		abi:     parsedABI,
+		address: address,
+
+		apiKey: apiKey,
+		apiID:  make(map[string]string),
+
+		chainID: chainID,
+		batchID: big.NewInt(0),
+
+		forwarderAddress:  forwarderAddress,
+		forwarderContract: forwarderContract,
+	}
+
+	res, err := mexa.MetaApi(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	for _, api := range res.List {
+		mexa.apiID[api.Method] = api.ID
+	}
+
+	return mexa, nil
+}
+
+func (m *Mexa) Transact(opts *gasless.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
+	if opts.Context == nil {
+		opts.Context = context.Background()
+	}
+
+	apiId, ok := m.apiID[method]
 	if !ok {
-		return nil, fmt.Errorf("mexa transact requires ApiId string param")
+		return nil, fmt.Errorf("ApiID not found for %s", method)
+	}
+
+	data, err := m.abi.Pack(method, params...)
+	if err != nil {
+		return nil, err
+	}
+
+	callmsg := ethereum.CallMsg{
+		To:   &m.address,
+		From: opts.From,
+		Data: data,
+	}
+
+	gas, err := m.eth.EstimateGas(opts.Context, callmsg)
+	if err != nil {
+		return nil, err
 	}
 
 	callopts := bind.CallOpts{
-		Context: ctx,
-		From:    signer.Address(),
+		Context: opts.Context,
+		From:    opts.From,
 	}
 
-	nonce, err := m.contract.GetNonce(&callopts, signer.Address(), batchID)
+	nonce, err := m.forwarderContract.GetNonce(&callopts, opts.From, m.batchID)
 	if err != nil {
 		return nil, err
 	}
 
 	message := &Message{
-		From:          signer.Address(),
-		To:            *msg.To,
+		From:          opts.From,
+		To:            m.address,
 		Token:         common.HexToAddress("0x0"),
-		TxGas:         msg.Gas,
+		TxGas:         gas,
 		TokenGasPrice: "0",
-		BatchId:       batchID,
+		BatchId:       m.batchID,
 		BatchNonce:    nonce,
 		Deadline:      big.NewInt(time.Now().Add(time.Hour).Unix()),
-		Data:          hexutil.Encode(msg.Data),
+		Data:          hexutil.Encode(data),
 	}
-
-	fmt.Println(m.key)
 
 	typedData := core.TypedData{
 		Types:       Types,
 		PrimaryType: PrimaryType,
-		Domain:      m.domain,
 		Message:     message.TypedData(),
+		Domain: core.TypedDataDomain{
+			Name:              Name,
+			Version:           Version,
+			VerifyingContract: m.forwarderAddress.Hex(),
+			Salt:              hexutil.Encode(common.LeftPadBytes(m.chainID.Bytes(), 32)),
+		},
 	}
 
-	signature, err := signer.Sign(typedData)
+	signature, err := opts.MetaSigner(opts.From, typedData)
 	if err != nil {
 		return nil, err
 	}
@@ -162,9 +210,9 @@ func (m *Mexa) Transact(ctx context.Context, msg *ethereum.CallMsg, signer gasle
 	}
 
 	req := &MetaTxRequest{
+		ApiId:         apiId,
 		To:            message.To.Hex(),
 		From:          message.From.Hex(),
-		ApiId:         apiId,
 		SignatureType: SignatureTypeEIP712,
 		Params: []interface{}{
 			message,
@@ -173,11 +221,11 @@ func (m *Mexa) Transact(ctx context.Context, msg *ethereum.CallMsg, signer gasle
 		},
 	}
 
-	res, err := m.MetaTx(ctx, req)
+	res, err := m.MetaTx(opts.Context, req)
 	if err != nil {
 		return nil, fmt.Errorf("transaction failed: %v", err)
 	}
 
-	tx, _, err := m.eth.TransactionByHash(ctx, res.TxHash)
+	tx, _, err := m.eth.TransactionByHash(opts.Context, res.TxHash)
 	return tx, err
 }

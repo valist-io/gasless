@@ -40,7 +40,7 @@ func (m *Mexa) MetaTx(ctx context.Context, data *MetaTxRequest) (*MetaTxResponse
 	}
 
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
-	req.Header.Set("x-api-key", m.key)
+	req.Header.Set("x-api-key", m.apiKey)
 
 	res, err := m.client.Do(req)
 	if err != nil {
